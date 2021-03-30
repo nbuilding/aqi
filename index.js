@@ -7,6 +7,7 @@ const {
   VOICE_CHANNEL: vcId,
   LOG_CHANNEL: logId,
   NAME: channelName,
+  ROLES: rawRoles,
   TOKEN: token
 } = process.env
 
@@ -66,7 +67,14 @@ const userIds = new Set(
 )
 const userIdStream = fs.createWriteStream(USER_ID_PATH, { flags: 'a' })
 
-let lastTime = Date.now()
+const LAST_TIME_PATH = './data_time.txt'
+let lastTime = (() => {
+  try {
+    return +fs.readFileSync(LAST_TIME_PATH, 'utf8').trim() || Date.now()
+  } catch {
+    return Date.now()
+  }
+})()
 function displayDuration (milliseconds) {
   const seconds = (milliseconds / 1000 % 60).toFixed(3)
   const minutes = Math.floor(milliseconds / 60000)
@@ -80,6 +88,12 @@ function displayDuration (milliseconds) {
   }
 }
 
+const roles = rawRoles
+  .split('::')
+  .map(entry => entry.trim().split(':'))
+  .map(([roleId, minMs]) => [roleId, +minMs])
+  .sort((a, b) => b[1] - a[1])
+
 client.on('ready', () => {
   console.log(`I, ${client.user.tag}, am present!.`)
   if (!client.channels.cache.has(logId)) {
@@ -87,7 +101,7 @@ client.on('ready', () => {
   }
 })
 
-client.on('voiceStateUpdate', (oldState, newState) => {
+client.on('voiceStateUpdate', async (oldState, newState) => {
   if (newState.channelID === vcId) {
     if (!userIds.has(newState.member.id)) {
       const now = Date.now()
@@ -95,14 +109,27 @@ client.on('voiceStateUpdate', (oldState, newState) => {
       lastTime = now
 
       userIds.add(newState.member.id)
-      userIdStream.write(`${newState.member.id}=${now - lastTime}\n`)
+      userIdStream.write(`${newState.member.id}=${elapsed}\n`)
+      fs.writeFile(LAST_TIME_PATH, lastTime.toString(), err => {
+        if (err) {
+          console.error(err)
+        }
+      })
 
-      // TODO: Give roles?
+      const [roleId] = roles.find(([, minMs]) => elapsed >= minMs) || []
       client.channels.cache.get(logId).send(
         `<@${newState.member.id}> ${random(phrases)}`,
         {
           embed: {
-            description: `${channelName} hadn't been touched for ${displayDuration(elapsed)}! ${random(phrases2)}`
+            description: `No one new had touched ${channelName} for ${
+              displayDuration(elapsed)
+            } until you joined. ${random(phrases2)}\n\n${
+              roleId
+                ? await newState.member.roles.add([roleId])
+                  .then(() => `I gave you <@&${roleId}> for your patience.`)
+                  .catch(err => `I would've given you <@&${roleId}> for your patience, but I can't. :(`)
+                : 'You didn\'t wait long enough, so I shall not give you a role.'
+            }`
           }
         }
       )
@@ -115,7 +142,7 @@ client.on('message', message => {
   if (message.content === '😷 last touch' || message.content === '😷 last touched') {
     message.channel.send('', {
       embed: {
-        description: `${channelName} hasn't been touched for ${displayDuration(Date.now() - lastTime)}.`,
+        description: `No one new has touched ${channelName} for ${displayDuration(Date.now() - lastTime)}.`,
         timestamp: new Date(lastTime).toISOString()
       }
     })
