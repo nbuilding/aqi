@@ -77,7 +77,7 @@ let lastTime = (() => {
 })()
 function displayDuration (milliseconds) {
   const seconds = (milliseconds / 1000 % 60).toFixed(3)
-  const minutes = Math.floor(milliseconds / 60000)
+  const minutes = Math.floor(milliseconds / 60000) % 60
   const hours = Math.floor(milliseconds / 60000 / 60)
   if (milliseconds < 60000) {
     return `${seconds} seconds`
