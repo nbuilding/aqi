@@ -82,9 +82,9 @@ function displayDuration (milliseconds) {
   if (milliseconds < 60000) {
     return `${seconds} seconds`
   } else if (hours === 0) {
-    return `${minutes}:${seconds}`
+    return `${minutes}:${seconds.padStart(6, '0')}`
   } else {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds}`
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.padStart(6, '0')}`
   }
 }
 
